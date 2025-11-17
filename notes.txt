@@ -1,0 +1,3 @@
+2. Generate timestamp and password
+const timestamp = getTimestamp();
+const password = generatePassword(timestamp);
