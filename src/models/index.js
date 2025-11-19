@@ -5,13 +5,15 @@ const logger = require("../config/logger");
 
 // Import models
 const Transaction = require("./transaction.model");
-const User = require("./user.model"); // <--- NEW IMPORT
+const User = require("./user.model");
+const ApiLog = require("./apilog.model"); // <--- MUST BE PRESENT
 
 const db = {
   sequelize,
   Sequelize,
   Transaction,
-  User, // <--- NEWLY ADDED
+  User,
+  ApiLog, // <--- API LOG MUST BE EXPOSED HERE
 };
 
 /**

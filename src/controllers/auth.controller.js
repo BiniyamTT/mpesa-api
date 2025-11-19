@@ -2,7 +2,7 @@
 const jwt = require("jsonwebtoken");
 const { User } = require("../models/index").db;
 const logger = require("../config/logger");
-
+const { logToDB } = require("../services/log.service");
 /**
  * @function registerAdmin
  * @description Creates a new admin user.
@@ -29,6 +29,11 @@ const registerAdmin = async (req, res) => {
     const newUser = await User.create({ email, password });
 
     logger.info(`New admin user created: ${newUser.email}`);
+    logToDB("INFO", "New admin user registered.", {
+      userId: newUser.id,
+      email: newUser.email,
+    }); // <--- NEW DB LOG
+
     res.status(201).json({
       status: "success",
       message: "Admin user created successfully.",
@@ -67,6 +72,7 @@ const loginAdmin = async (req, res) => {
     // 2. Compare password (using our custom model method)
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      logToDB("WARN", "Failed login attempt.", { email }); // <--- NEW DB LOG
       return res
         .status(401)
         .json({ status: "error", message: "Invalid credentials." });
@@ -80,6 +86,7 @@ const loginAdmin = async (req, res) => {
     );
 
     logger.info(`Admin user logged in: ${user.email}`);
+    logToDB("INFO", "Admin user logged in successfully.", { userId: user.id }); // <--- NEW DB LOG
     res.status(200).json({
       status: "success",
       message: "Login successful.",

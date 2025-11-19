@@ -35,6 +35,7 @@ const logger = createLogger({
     }),
     new transports.File({
       filename: "logs/combined.log",
+      level: "info", // Changed to 'info' to catch all success/failures
       format: fileFormat,
       maxsize: 5242880,
     }),

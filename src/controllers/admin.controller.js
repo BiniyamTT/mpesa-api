@@ -1,24 +1,75 @@
 // This controller provides data for the Admin Dashboard (FR-AD3, FR-AD4)
-const { Transaction } = require("../models/index").db;
+
+// --- Imports ---
+const { Transaction, User, ApiLog } = require("../models/index").db; // All models
 const logger = require("../config/logger");
-// --- NEW IMPORTS ---
+const { Op } = require("sequelize"); // Sequelize Operators for filtering
 const {
   tokenCache,
   forceRefreshToken,
-} = require("../services/mpesa.auth.service");
+} = require("../services/mpesa.auth.service"); // Token Services
 
 /**
  * @function getTransactions
- * @description Gets a paginated list of all transactions.
+ * @description Gets a list of all transactions, supporting filtering by status, search term (phone/ref), and date range.
  * Fulfills FR-AD3 (Transaction History).
  */
 const getTransactions = async (req, res) => {
   try {
-    // We can add pagination, filtering, sorting later
-    // const { page = 1, limit = 20, status } = req.query;
+    const { since, status, search, dateFrom, dateTo } = req.query;
+    let whereClause = {};
+    const createdAtClauses = {};
+
+    const hasDateRange = dateFrom || dateTo; // NEW: Check if the user set a date range
+
+    // 1. Determine Date Filter Logic
+    if (hasDateRange) {
+      // A. EXPLICIT DATE RANGE (User Audit)
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        if (!isNaN(fromDate)) {
+          createdAtClauses[Op.gte] = fromDate;
+        }
+      }
+
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        if (!isNaN(toDate)) {
+          // Set time to the end of the day to include the entire 'to' date
+          toDate.setHours(23, 59, 59, 999);
+          createdAtClauses[Op.lte] = toDate;
+        }
+      }
+    } else if (since) {
+      // B. SMART POLLING (Only runs if no explicit range is set)
+      const lastFetchTime = new Date(since);
+      if (!isNaN(lastFetchTime)) {
+        createdAtClauses[Op.gt] = lastFetchTime;
+      }
+    }
+
+    // Apply combined date filter if any clauses exist
+    if (Object.keys(createdAtClauses).length > 0) {
+      whereClause.createdAt = createdAtClauses;
+    }
+
+    // 3. Status Filter (from select dropdown)
+    if (status) {
+      whereClause.status = status;
+    }
+
+    // 4. Search Filter (by 'search' term - targets Phone or Reference)
+    if (search) {
+      const searchTerm = `%${search}%`;
+      whereClause[Op.or] = [
+        { phoneNumber: { [Op.like]: searchTerm } },
+        { accountReference: { [Op.like]: searchTerm } },
+      ];
+    }
 
     const transactions = await Transaction.findAll({
-      order: [["createdAt", "DESC"]], // Show newest first
+      where: whereClause,
+      order: [["createdAt", "DESC"]],
     });
 
     res.status(200).json({
@@ -26,7 +77,10 @@ const getTransactions = async (req, res) => {
       data: transactions,
     });
   } catch (error) {
-    logger.error("Error fetching transactions:", { error: error.message });
+    logger.error("Error fetching transactions:", {
+      error: error.message,
+      stack: error.stack,
+    });
     res
       .status(500)
       .json({ status: "error", message: "Internal server error." });
@@ -61,7 +115,8 @@ const getTransactionById = async (req, res) => {
   }
 };
 
-// --- NEW FUNCTION ---
+// --- Token Management (FR-AD2, FR-AD6) ---
+
 /**
  * @function getTokenStatus
  * @description Gets the current M-PESA token status.
@@ -95,7 +150,6 @@ const getTokenStatus = (req, res) => {
   }
 };
 
-// --- NEW FUNCTION ---
 /**
  * @function manualRefreshToken
  * @description Manually triggers a refresh of the M-PESA token.
@@ -103,6 +157,7 @@ const getTokenStatus = (req, res) => {
  */
 const manualRefreshToken = async (req, res) => {
   try {
+    // req.user is attached by protectAdmin middleware
     logger.warn(`Manual token refresh triggered by admin: ${req.user.email}`);
     const newToken = await forceRefreshToken();
 
@@ -126,6 +181,6 @@ const manualRefreshToken = async (req, res) => {
 module.exports = {
   getTransactions,
   getTransactionById,
-  getTokenStatus, // <--- NEW EXPORT
-  manualRefreshToken, // <--- NEW EXPORT
+  getTokenStatus,
+  manualRefreshToken,
 };

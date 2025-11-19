@@ -1,5 +1,3 @@
-// This is the core service for handling M-PESA OAuth authentication.
-
 const axios = require("axios");
 const logger = require("../config/logger");
 const {
@@ -8,6 +6,7 @@ const {
   consumerSecret,
   authEndpoint,
 } = require("../config/mpesa.config");
+const { logToDB } = require("./log.service"); // <--- CRITICAL FIX: ADD MISSING IMPORT
 
 // An in-memory cache for the token.
 // In a production/multi-server setup, you would use Redis for this.
@@ -31,6 +30,7 @@ const getMpesaToken = async () => {
 
   // If token is invalid or expired, fetch a new one.
   logger.info("Fetching new M-PESA token...");
+  logToDB("INFO", "M-PESA token requested (fetching new one)."); // <--- NEW DB LOG
 
   try {
     // Generate the Base64-encoded credentials
@@ -59,6 +59,7 @@ const getMpesaToken = async () => {
     tokenCache.token = token;
 
     logger.info("Successfully fetched and cached new M-PESA token.");
+    logToDB("INFO", "M-PESA token successfully renewed."); // <--- NEW DB LOG
     return token;
   } catch (error) {
     // Log the full error
@@ -84,6 +85,10 @@ const getMpesaToken = async () => {
     tokenCache.expiresAt = 0;
 
     // Re-throw the error so the calling function knows something went wrong
+    logToDB("ERROR", "Failed to retrieve M-PESA OAuth token.", {
+      status: error.response?.status,
+      message: error.message,
+    }); // <--- NEW DB LOG
     throw new Error("Could not authenticate with M-PESA.");
   }
 };
@@ -94,7 +99,9 @@ const getMpesaToken = async () => {
  * Fulfills FR-AD6.
  */
 const forceRefreshToken = async () => {
-  // logger.warn(`Manual token refresh triggered by admin: ${req.user.email}`); // <-- THIS LINE IS THE BUG. REMOVE IT.
+  logToDB("INFO", "Manual token cache invalidation requested.", {
+    type: "admin_action",
+  });
   tokenCache.token = null;
   tokenCache.expiresAt = 0;
   return await getMpesaToken();

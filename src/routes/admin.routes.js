@@ -2,6 +2,7 @@
 const express = require("express");
 const adminController = require("../controllers/admin.controller.js");
 const { protectAdmin } = require("../middleware/auth.admin.js");
+const logController = require('../controllers/log.controller'); // <-- ADDED LOG CONTROLLER
 
 const router = express.Router();
 
@@ -25,5 +26,11 @@ router.get("/token", adminController.getTokenStatus);
 // @route POST /admin/token/refresh
 // @desc Force a refresh of the M-PESA token
 router.post("/token/refresh", adminController.manualRefreshToken);
+
+// @route GET /admin/logs
+// @desc Get system API logs.
+// @access Protected (JWT)
+router.get('/logs', logController.getApiLogs); // <-- NEW DIRECT DEFINITION
+
 
 module.exports = router;
